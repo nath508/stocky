@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Homystocky — Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+
+<body>
+
+<div id="toast"></div>
+
+
+<!-- =====================================================
+     LOGIN SCREEN
+===================================================== -->
+
+<div id="loginScreen"
+     class="screen {% if show_dashboard %}hidden{% endif %}">
+
+    <div class="login-box">
+
+        <div class="logo">⌂</div>
+
+        <h1>Homystocky</h1>
+
+        <p>Your simple household shopping assistant.</p>
+
+        <form onsubmit="handleLogin(event)">
+
+            <div class="input-group">
+                <label>Email Address</label>
+                <input type="email" id="loginEmail" required placeholder="you@example.com">
+            </div>
+
+            <div class="input-group">
+                <label>Password</label>
+                <input type="password" id="loginPassword" required placeholder="Enter your password">
+            </div>
+
+            <button type="submit" class="btn-login">Log in</button>
+
+            <p id="loginError" class="login-error"></p>
+
+            <div class="switch">
+                Don't have an account?
+                <a href="/signup_page">Sign up</a>
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+
+<!-- =====================================================
+     DASHBOARD SCREEN
+===================================================== -->
+
+<div id="dashboardScreen"
+     class="screen {% if not show_dashboard %}hidden{% endif %}">
+
+    <header>
+
+        <h2 style="margin:0; font-size:20px;">Homystocky</h2>
+
+        <div style="display:flex; align-items:center; gap:12px;">
+
+            <div class="avatar">
+                {% if email %}{{ email[0]|upper }}{% else %}?{% endif %}
+            </div>
+
+            <a href="/logout" class="logout">Log out</a>
+
+        </div>
+
+    </header>
+
+
+    <div class="content">
+
+        <div class="menu-panel">
+
+            <div class="category-tabs" id="categoryTabs">
+
+                <button type="button" class="tab-btn active"
+                        onclick="filterCategory('Groceries', this)">
+                    Groceries
+                </button>
+
+                <button type="button" class="tab-btn"
+                        onclick="filterCategory('Cleaning supplies', this)">
+                    Cleaning Supplies
+                </button>
+
+                <button type="button" class="tab-btn"
+                        onclick="filterCategory('Personal care', this)">
+                    Personal Care
+                </button>
+
+                <button type="button" class="tab-btn"
+                        onclick="filterCategory('Bathroom & hygiene', this)">
+                    Bathroom &amp; Hygiene
+                </button>
+
+            </div>
+
+
+            <div class="action-buttons">
+
+                <button type="button" class="btn-action btn-add"
+                        onclick="addEmptyRow()">
+                    + Add
+                </button>
+
+                <button type="button" class="btn-action btn-save"
+                        onclick="saveList()">
+                    Save
+                </button>
+
+                <button type="button" class="btn-action btn-generate"
+                        onclick="generateShoppingList()">
+                    Generate List
+                </button>
+
+                <button type="button" class="btn-action btn-visit"
+                        onclick="goToShoppingList()">
+                    Visit List
+                </button>
+
+            </div>
+
+        </div>
+
+
+        <div class="table-container">
+
+            <div class="table-header">
+                <div>PRODUCT</div>
+                <div>DESCRIPTION</div>
+                <div>QTY</div>
+                <div>AVAIL / NOT</div>
+                <div>DELETE</div>
+            </div>
+
+            <div id="tableBody"></div>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- =====================================================
+     SHOPPING LIST SCREEN
+===================================================== -->
+
+<div id="shoppingListScreen" class="screen hidden">
+
+    <header>
+
+        <button type="button" class="btn-login"
+                style="width:auto; padding:8px 16px; margin:0;"
+                onclick="closeShoppingList()">
+            Go Back
+        </button>
+
+        <h2 style="margin:0; font-size:20px;">Your Shopping List</h2>
+
+        <div style="width:70px;"></div>
+
+    </header>
+
+
+    <div class="content shopping-page-content">
+
+        <div class="budget-bar">
+
+            <div class="budget-input-row">
+
+                <label>My Budget</label>
+
+                <input type="number"
+                       id="budgetDisplay"
+                       placeholder="0.00"
+                       min="0"
+                       step="0.01"
+                       oninput="updateBudgetFromInput(this.value)">
+
+            </div>
+
+            <div class="budget-summary">
+
+                <div class="summary-box">
+                    <span>Subtotal</span>
+                    <strong id="subtotalDisplay" class="text-green">M 0.00</strong>
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="shop-table">
+
+            <div class="shop-table-header">
+                <div>Item</div>
+                <div>Got / Need</div>
+                <div>Price (M)</div>
+            </div>
+
+            <div id="shoppingListBody"></div>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- =====================================================
+     JAVASCRIPT
+===================================================== -->
+
+<script>
+
+// =========================================================
+// TOAST NOTIFICATION
+// =========================================================
+
+function showToast(message, isError = false) {
+
+    const toast = document.getElementById('toast');
+
+    toast.textContent = message;
+    toast.className = 'show' + (isError ? ' error' : '');
+
+    if (window.toastTimer) {
+        clearTimeout(window.toastTimer);
+    }
+
+    window.toastTimer = setTimeout(() => {
+        toast.classList.remove('show');
+    }, 3000);
+}
+
+
+// =========================================================
+// LOGIN
+// =========================================================
+
+async function handleLogin(e) {
+
+    e.preventDefault();
+
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
+    const errorDisplay = document.getElementById('loginError');
+    const btn = e.target.querySelector('button');
+
+    btn.textContent = 'Logging in...';
+    btn.disabled = true;
+    errorDisplay.textContent = '';
+
+    try {
+
+        const res = await fetch('/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email, password: password })
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+            window.location.href = data.redirect;
+        } else {
+            errorDisplay.textContent = data.error || 'Login failed.';
+            btn.textContent = 'Log in';
+            btn.disabled = false;
+        }
+
+    } catch (error) {
+
+        errorDisplay.textContent = 'Network error.';
+        btn.textContent = 'Log in';
+        btn.disabled = false;
+
+    }
+}
+
+
+// =========================================================
+// DASHBOARD INITIALISATION
+// (Reads the page's own state instead of using Jinja
+//  inside <script> — avoids VS Code JS parse errors.)
+// =========================================================
+
+const showDashboard = (function () {
+
+    const root = document.getElementById('dashboardScreen');
+
+    if (!root) return false;
+
+    return !root.classList.contains('hidden');
+
+})();
+
+
+if (showDashboard) {
+
+    let currentCategory = 'Groceries';
+    let items = [];
+    let generatedList = [];
+    let originalBudget = 0;
+
+
+    // =====================================================
+    // LOAD ITEMS FROM DATABASE
+    // =====================================================
+
+    async function loadItems() {
+
+        try {
+
+            const res = await fetch('/api/items');
+
+            if (!res.ok) {
+                throw new Error('Could not load your saved items.');
+            }
+
+            items = await res.json();
+            renderTable();
+
+        } catch (error) {
+
+            showToast('Could not load your saved household list.', true);
+            console.error(error);
+
+        }
+    }
+
+
+    // =====================================================
+    // CHANGE CATEGORY
+    // =====================================================
+
+    function filterCategory(cat, btn) {
+
+        currentCategory = cat;
+
+        document.querySelectorAll('.tab-btn').forEach(button => {
+            button.classList.remove('active');
+        });
+
+        btn.classList.add('active');
+
+        renderTable();
+    }
+
+
+    // =====================================================
+    // SAFELY DISPLAY USER INPUT
+    // =====================================================
+
+    function escapeHTML(value) {
+
+        return String(value ?? '').replace(
+            /[&<>"']/g,
+            character => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            })[character]
+        );
+    }
+
+
+    // =====================================================
+    // DISPLAY HOUSEHOLD ITEMS
+    // =====================================================
+
+    function renderTable() {
+
+        const tbody = document.getElementById('tableBody');
+
+        const filtered = items.filter(item => item.category === currentCategory);
+
+        if (filtered.length === 0) {
+
+            tbody.innerHTML = `
+                <div style="padding:40px; text-align:center; color:#88a692; font-size:14px;">
+                    No items yet.<br>
+                    Tap + Add to start.
+                </div>
+            `;
+
+            return;
+        }
+
+        tbody.innerHTML = filtered.map(item => `
+
+            <div class="table-row">
+
+                <input type="text"
+                       value="${escapeHTML(item.name)}"
+                       placeholder="Product"
+                       onchange="updateItem(${item.id}, 'name', this.value)">
+
+                <input type="text"
+                       value="${escapeHTML(item.description)}"
+                       placeholder="Description"
+                       onchange="updateItem(${item.id}, 'description', this.value)">
+
+                <input type="number"
+                       value="${item.quantity}"
+                       min="1"
+                       onchange="updateItem(${item.id}, 'quantity', this.value)">
+
+                <div class="radio-group">
+
+                    <label>
+                        <input type="radio"
+                               name="avail_${item.id}"
+                               ${item.available ? 'checked' : ''}
+                               onchange="updateItem(${item.id}, 'available', true)">
+                        Avail
+                    </label>
+
+                    <label>
+                        <input type="radio"
+                               name="avail_${item.id}"
+                               ${!item.available ? 'checked' : ''}
+                               onchange="updateItem(${item.id}, 'available', false)">
+                        Not
+                    </label>
+
+                </div>
+
+                <button type="button"
+                        class="btn-delete-row"
+                        onclick="deleteRow(${item.id})">
+                    Delete
+                </button>
+
+            </div>
+
+        `).join('');
+    }
+
+
+    // =====================================================
+    // UPDATE ITEM IN BROWSER (saved on Save)
+    // =====================================================
+
+    function updateItem(id, field, val) {
+
+        const item = items.find(item => item.id === id);
+
+        if (!item) return;
+
+        if (field === 'quantity') {
+            val = Math.max(1, Math.min(999, parseInt(val) || 1));
+        }
+
+        item[field] = val;
+    }
+
+
+    // =====================================================
+    // DELETE ITEM IN BROWSER (saved on Save)
+    // =====================================================
+
+    function deleteRow(id) {
+
+        items = items.filter(item => item.id !== id);
+
+        renderTable();
+
+        showToast('Item removed. Click Save to confirm deletion.');
+    }
+
+
+    // =====================================================
+    // ADD NEW ITEM
+    // =====================================================
+
+    function addEmptyRow() {
+
+        items.unshift({
+            id: Date.now(),
+            name: '',
+            description: '',
+            quantity: 1,
+            available: true,
+            category: currentCategory
+        });
+
+        renderTable();
+    }
+
+
+    // =====================================================
+    // SAVE ITEMS TO DATABASE
+    // =====================================================
+
+    async function saveList() {
+
+        const saveButton = document.querySelector('.btn-save');
+
+        saveButton.disabled = true;
+        saveButton.textContent = 'Saving...';
+
+        try {
+
+            const res = await fetch('/api/items', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(items)
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.error || 'Could not save your list.');
+            }
+
+            // Reload from database so temporary browser IDs
+            // become real database IDs.
+            const reload = await fetch('/api/items');
+
+            if (!reload.ok) {
+                throw new Error('Your list was saved, but could not be reloaded.');
+            }
+
+            items = await reload.json();
+            renderTable();
+
+            showToast(data.message || 'Your household list has been saved successfully!');
+
+        } catch (error) {
+
+            showToast(error.message || 'Network error. Please try again.', true);
+            console.error(error);
+
+        } finally {
+
+            saveButton.disabled = false;
+            saveButton.textContent = 'Save';
+
+        }
+    }
+
+
+    // =====================================================
+    // GENERATE SHOPPING LIST
+    // =====================================================
+
+    function generateShoppingList() {
+
+        const needed = items.filter(item => {
+            return !item.available && item.name.trim() !== '';
+        });
+
+        generatedList = needed.map(item => ({
+            ...item,
+            gotQty: 0,
+            actualPrice: ''
+        }));
+
+        if (needed.length === 0) {
+            showToast("No items marked as 'Not' to generate a list.", true);
+            return;
+        }
+
+        showToast('Shopping list generated with ' + needed.length + ' items!');
+    }
+
+
+    // =====================================================
+    // VISIT SHOPPING LIST
+    // =====================================================
+
+    function goToShoppingList() {
+
+        const body = document.getElementById('shoppingListBody');
+
+        if (generatedList.length === 0) {
+
+            body.innerHTML = `
+                <div style="padding:40px; text-align:center; color:var(--muted); font-size:14px;">
+                    No items generated.<br>
+                    Click "Generate List" first.
+                </div>
+            `;
+
+        } else {
+
+            body.innerHTML = generatedList.map(item => `
+
+                <div class="shop-table-row" id="shop-item-${item.id}">
+
+                    <div class="shop-check">
+
+                        <input type="checkbox"
+                               ${item.gotQty >= item.quantity ? 'checked' : ''}
+                               onchange="toggleCheck(${item.id}, this)">
+
+                        <div class="shop-name">${escapeHTML(item.name)}</div>
+
+                    </div>
+
+                    <div style="display:flex; align-items:center; gap:4px;">
+
+                        <input type="number"
+                               class="shop-qty-input"
+                               value="${item.gotQty}"
+                               min="0"
+                               max="${item.quantity}"
+                               oninput="updateGotQty(${item.id}, this.value)">
+
+                        <span style="font-size:11px; color:var(--muted);">
+                            / ${item.quantity}
+                        </span>
+
+                    </div>
+
+                    <div>
+
+                        <input type="number"
+                               class="shop-price-input"
+                               placeholder="0.00"
+                               min="0"
+                               step="0.01"
+                               value="${item.actualPrice || ''}"
+                               oninput="updatePrice(${item.id}, this.value)">
+
+                    </div>
+
+                </div>
+
+            `).join('');
+
+            originalBudget = parseFloat(
+                document.getElementById('budgetDisplay').value
+            ) || 0;
+
+            calcBudget();
+        }
+
+        document.getElementById('dashboardScreen').classList.add('hidden');
+        document.getElementById('shoppingListScreen').classList.remove('hidden');
+    }
+
+
+    // =====================================================
+    // RETURN TO DASHBOARD
+    // =====================================================
+
+    function closeShoppingList() {
+
+        document.getElementById('shoppingListScreen').classList.add('hidden');
+        document.getElementById('dashboardScreen').classList.remove('hidden');
+    }
+
+
+    // =====================================================
+    // BUDGET
+    // =====================================================
+
+    function updateBudgetFromInput(val) {
+
+        originalBudget = parseFloat(val) || 0;
+
+        calcBudget();
+    }
+
+
+    // =====================================================
+    // UPDATE COLLECTED QUANTITY
+    // =====================================================
+
+    function updateGotQty(id, val) {
+
+        const item = generatedList.find(item => item.id === id);
+
+        if (!item) return;
+
+        let quantity = parseInt(val) || 0;
+        quantity = Math.max(0, Math.min(item.quantity, quantity));
+        item.gotQty = quantity;
+
+        const card = document.getElementById(`shop-item-${id}`);
+
+        if (card) {
+
+            card.classList.toggle('checked', item.gotQty >= item.quantity);
+
+            const checkbox = card.querySelector('input[type="checkbox"]');
+            if (checkbox) {
+                checkbox.checked = item.gotQty >= item.quantity;
+            }
+        }
+
+        calcBudget();
+    }
+
+
+    // =====================================================
+    // CHECK / UNCHECK SHOPPING ITEM
+    // =====================================================
+
+    function toggleCheck(id, checkbox) {
+
+        const item = generatedList.find(item => item.id === id);
+
+        if (!item) return;
+
+        item.gotQty = checkbox.checked ? item.quantity : 0;
+
+        const card = document.getElementById(`shop-item-${id}`);
+        const quantityInput = card ? card.querySelector('.shop-qty-input') : null;
+
+        if (quantityInput) {
+            quantityInput.value = item.gotQty;
+        }
+
+        if (card) {
+            card.classList.toggle('checked', checkbox.checked);
+        }
+
+        calcBudget();
+    }
+
+
+    // =====================================================
+    // UPDATE ACTUAL PRICE
+    // =====================================================
+
+    function updatePrice(id, val) {
+
+        const item = generatedList.find(item => item.id === id);
+
+        if (item) {
+            item.actualPrice = val;
+            calcBudget();
+        }
+    }
+
+
+    // =====================================================
+    // CALCULATE BUDGET
+    // =====================================================
+
+    function calcBudget() {
+
+        let total = 0;
+
+        generatedList.forEach(item => {
+
+            const price = parseFloat(item.actualPrice);
+
+            if (Number.isFinite(price) && price >= 0) {
+                total += price * item.gotQty;
+            }
+        });
+
+        document.getElementById('subtotalDisplay').textContent = `M ${total.toFixed(2)}`;
+
+        const remaining = originalBudget - total;
+        const budgetDisplay = document.getElementById('budgetDisplay');
+
+        budgetDisplay.value = remaining.toFixed(2);
+
+        if (remaining < 0) {
+            budgetDisplay.classList.add('text-red');
+            budgetDisplay.classList.remove('text-green');
+        } else {
+            budgetDisplay.classList.remove('text-red');
+            budgetDisplay.classList.add('text-green');
+        }
+    }
+
+
+    // =====================================================
+    // LOAD SAVED ITEMS WHEN DASHBOARD OPENS
+    // =====================================================
+
+    loadItems();
+
+}
+
+</script>
+
+</body>
+</html>

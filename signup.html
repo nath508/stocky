@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Homystocky — Sign Up</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+<style>
+  /* Small override just for the signup form inputs to match app.css */
+  .signup-container { width: 100%; max-width: 420px; background: var(--card); border-radius: 20px; border: 1px solid var(--border); padding: 40px 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); margin: auto; }
+  .btn-secondary { background: var(--input); color: var(--green); border: 1px solid var(--border); width: 100%; padding: 15px; border-radius: 10px; font-weight: 800; font-size: 15px; cursor: pointer; margin-top: 5px; transition: opacity 0.2s; }
+  .btn-secondary:hover { opacity: 0.9; }
+  .btn-primary { background: var(--green); color: #000; margin-top: 20px; width: 100%; padding: 15px; border-radius: 10px; border: none; font-weight: 800; font-size: 15px; cursor: pointer; transition: opacity 0.2s; }
+  .form-message { min-height: 20px; color: var(--red); font-size: 13px; margin: 15px 0 0; text-align: center; font-weight: 600; }
+  body { display: flex; align-items: center; justify-content: center; padding: 24px; min-height: 100vh; }
+</style>
+</head>
+<body>
+
+<div class="signup-container">
+  <div class="logo">HS</div>
+  <h1>Create your account</h1>
+  <p style="color: var(--muted); margin-bottom: 25px; font-size: 14px; text-align: center;">Verify your email, then choose a password.</p>
+  
+  <form id="signupForm">
+    <div class="input-group">
+      <label>Email Address</label>
+      <input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required>
+    </div>
+    
+    <button class="btn-secondary" id="sendCode" type="button">Send verification code</button>
+    
+    <div class="input-group" style="margin-top: 15px;">
+      <label>Five-digit verification code</label>
+      <input name="code" id="code" inputmode="numeric" pattern="[0-9]{5}" maxlength="5" placeholder="12345" required>
+    </div>
+    
+    <div class="input-group">
+      <label>Create password</label>
+      <input name="password" type="password" minlength="8" autocomplete="new-password" placeholder="At least 8 characters" required>
+    </div>
+    
+    <div class="input-group">
+      <label>Confirm password</label>
+      <input id="confirmPassword" type="password" minlength="8" autocomplete="new-password" placeholder="Enter password again" required>
+    </div>
+    
+    <button class="btn-primary" type="submit">Create account</button>
+    <p id="formMessage" class="form-message"></p>
+  </form>
+  
+  <p style="margin-top: 25px; font-size: 14px; color: var(--muted); text-align: center;">Already registered? <a href="{{ url_for('login_page') }}" style="color: var(--green); font-weight: 700; text-decoration: none;">Log in</a></p>
+</div>
+
+<script>
+  const msg = document.getElementById('formMessage');
+  
+  document.getElementById('sendCode').addEventListener('click', async () => {
+    const email = document.getElementById('email').value.trim();
+    if (!email) { msg.textContent = 'Enter your email address first.'; return; }
+    msg.textContent = 'Sending...';
+    msg.style.color = 'var(--muted)';
+    const r = await fetch('/api/signup/send-code', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({email})
+    });
+    const d = await r.json();
+    msg.textContent = d.message || d.error;
+    msg.style.color = r.ok ? 'var(--green)' : 'var(--red)';
+  });
+
+  document.getElementById('signupForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    if (f.get('password') !== document.getElementById('confirmPassword').value) {
+      msg.textContent = 'The passwords do not match.';
+      msg.style.color = 'var(--red)';
+      return;
+    }
+    msg.textContent = 'Creating account...';
+    msg.style.color = 'var(--muted)';
+    const r = await fetch('/signup', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({email: f.get('email'), code: f.get('code'), password: f.get('password')})
+    });
+    const d = await r.json();
+    if (r.ok) { location.href = d.redirect; } 
+    else { msg.textContent = d.error || 'Could not create account.'; msg.style.color = 'var(--red)'; }
+  });
+</script>
+</body>
+</html>

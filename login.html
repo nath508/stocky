@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Homystocky — Log In</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+</head>
+<body>
+
+<div id="loginScreen" class="screen" style="justify-content: center; align-items: center; padding: 24px; text-align: center; background: url('/static/list.jpg') no-repeat center center fixed; background-size: cover;">
+  <div class="login-box">
+    <div class="logo">⌂</div>
+    <h1>Homystocky</h1>
+    <p>Your simple household shopping assistant.</p>
+    <form onsubmit="handleLogin(event)">
+      <div class="input-group"><label>Email Address</label><input type="email" id="loginEmail" required placeholder="you@example.com"></div>
+      <div class="input-group"><label>Password</label><input type="password" id="loginPassword" required placeholder="••••••••"></div>
+      <button type="submit" class="btn-login">Log in</button>
+      <p id="loginError" class="login-error"></p>
+      <div class="switch">Don't have an account? <a href="/signup_page">Sign up</a></div>
+    </form>
+  </div>
+</div>
+
+<script>
+  async function handleLogin(e) {
+    e.preventDefault();
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
+    const errorDisplay = document.getElementById('loginError');
+    const btn = e.target.querySelector('button');
+    
+    btn.textContent = 'Logging in...'; btn.disabled = true; errorDisplay.textContent = '';
+
+    try {
+      const res = await fetch('/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
+      const data = await res.json();
+      if (res.ok) { window.location.href = data.redirect; } 
+      else { errorDisplay.textContent = data.error || 'Login failed'; btn.textContent = 'Log in'; btn.disabled = false; }
+    } catch (err) { errorDisplay.textContent = "Network error."; btn.textContent = 'Log in'; btn.disabled = false; }
+  }
+</script>
+</body>
+</html>
